@@ -26,32 +26,6 @@ jobs:
       working-directory: truffleruby
       run: echo "::set-output name=commit::$(git rev-parse HEAD)"
 
-    - name: Cancel if latest commit already built
-      uses: actions/github-script@v2
-      id: check_commit
-      with:
-        script: |
-          const latestDevCommit = "${{ steps.latest_commit.outputs.commit }}"
-          const { owner, repo } = context.repo
-          let { data: release } = await github.repos.getLatestRelease({ owner, repo })
-          const latestReleaseCommit = release.body.split('@')[1]
-          console.log(`Latest Release commit: ${latestReleaseCommit}`)
-          console.log(`Latest TruffleRuby commit: ${latestDevCommit}`)
-          if (latestReleaseCommit === latestDevCommit) {
-            console.log('Cancelling ...');
-            const run_id = "${{ github.run_id }}";
-            await github.actions.cancelWorkflowRun({ owner, repo, run_id });
-            return 'stop'
-          } else {
-            return 'build'
-          }
-        result-encoding: string
-    - name: Waiting for cancellation
-      run: sleep 60
-      if: steps.check_commit.outputs.result == 'stop'
-    - name: Should build?
-      run: test "${{ steps.check_commit.outputs.result }}" = "build"
-
     - name: Create artifact files
       run: |
         mkdir info
