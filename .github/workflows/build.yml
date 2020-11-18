@@ -18,8 +18,9 @@ jobs:
     - name: Clone TruffleRuby
       uses: actions/checkout@v2
       with:
-        repository: oracle/truffleruby
+        repository: eregon/truffleruby
         path: truffleruby
+        ref: bd/bigsur
     - name: Set latest_commit
       id: latest_commit
       working-directory: truffleruby
@@ -51,32 +52,10 @@ jobs:
     - name: Should build?
       run: test "${{ steps.check_commit.outputs.result }}" = "build"
 
-    - name: Set tag name
-      id: tag_name
-      run: |
-        if [[ "${{ github.event_name }}" == "schedule" ]]; then
-          tag=builds-$(date +%Y%m%d-%H%M%S)
-        else
-          tag=$(basename "${{ github.ref }}")
-        fi
-        echo "::set-output name=tag::$tag"
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ steps.tag_name.outputs.tag }}
-        release_name: ${{ steps.tag_name.outputs.tag }}
-        draft: true
-        prerelease: false
-        body: oracle/truffleruby@${{ steps.latest_commit.outputs.commit }}
     - name: Create artifact files
       run: |
         mkdir info
         echo "${{ steps.latest_commit.outputs.commit }}" > info/commit
-        echo "${{ steps.create_release.outputs.id }}" > info/release_id
-        echo "${{ steps.create_release.outputs.upload_url }}" > info/upload_url
     - uses: actions/upload-artifact@v1
       with:
         name: info
@@ -87,7 +66,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-16.04, ubuntu-18.04, ubuntu-20.04, macos-latest ]
+        os: [ macos-11.0 ]
     runs-on: ${{ matrix.os }}
     steps:
     - uses: actions/download-artifact@v1
@@ -109,7 +88,7 @@ jobs:
     - name: Clone TruffleRuby
       uses: actions/checkout@v2
       with:
-        repository: oracle/truffleruby
+        repository: eregon/truffleruby
         ref: ${{ steps.upload_info.outputs.commit }}
     - name: Install JVMCI
       run: |
@@ -120,7 +99,7 @@ jobs:
     - name: Clone Graal
       uses: actions/checkout@v2
       with:
-        repository: oracle/graal
+        repository: eregon/graal
         path: graal
         fetch-depth: 0
     - run: mv graal ..
@@ -137,37 +116,3 @@ jobs:
       run: ~/.rubies/truffleruby-head/bin/ruby --version
     - name: OpenSSL test
       run: ~/.rubies/truffleruby-head/bin/ruby -ropen-uri -e 'puts open("https://rubygems.org/") { |f| f.read(1024) }'
-
-    - name: Upload Built Ruby
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.upload_info.outputs.upload_url }}
-        asset_path: truffleruby-head-${{ matrix.os }}.tar.gz
-        asset_name: truffleruby-head-${{ matrix.os }}.tar.gz
-        asset_content_type: application/gzip
-
-  metadata:
-    name: Publish Release
-    needs: [build]
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/download-artifact@v1
-      with:
-        name: info
-    - name: Set publish_info
-      id: publish_info
-      run: |
-        release_id=$(cat info/release_id)
-        echo "::set-output name=release_id::$release_id"
-    - uses: eregon/publish-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        release_id: ${{ steps.publish_info.outputs.release_id }}
-    - uses: eregon/keep-last-n-releases@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        n: 7
